@@ -45,42 +45,6 @@ window._dbSave = async (entries) => {
 window._firebaseReady = true;
 document.dispatchEvent(new Event("firebase-ready"));
 </script>
-<!-- <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-// ─────────────────────────────────────────────
-// 🔧 PASTE YOUR FIREBASE CONFIG HERE
-// ─────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID"
-};
-// ─────────────────────────────────────────────
-
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
-const DOC_REF = doc(db, "diary", "grade3");
-
-window._dbLoad = async () => {
-  try {
-    const snap = await getDoc(DOC_REF);
-    return snap.exists() ? snap.data().entries || {} : {};
-  } catch(e) { console.error("load:", e); return null; }
-};
-window._dbSave = async (entries) => {
-  try {
-    await setDoc(DOC_REF, { entries, updatedAt: new Date().toISOString() });
-    return true;
-  } catch(e) { console.error("save:", e); return false; }
-};
-window._firebaseReady = true;
-document.dispatchEvent(new Event("firebase-ready")); -->
-<!-- </script> -->
 <style>
 :root{
   --bg:#f6f7fb; --card:#fff; --ink:#1f2430; --muted:#6b7280;
@@ -158,7 +122,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   let dbError   = false;
 
   // ═══════════════════════════════════════════════
-  //  Firebase
+  //  Database Handlers
   // ═══════════════════════════════════════════════
   async function loadEntries(){
     if(!window._dbLoad) return false;
@@ -196,24 +160,17 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     if(low.startsWith('art'))          return 'Art';
     if(low.startsWith('pe') || low.startsWith('physicaleducation')) return 'PE';
     if(low.startsWith('music'))        return 'Music';
-    // strip trailing (Support) / (S) / (L) qualifiers
     return raw.trim().replace(/\s*\(.*\)\s*$/, '').trim() || raw.trim();
   }
 
   // ═══════════════════════════════════════════════
   //  Words: split Hindi (Devanagari) vs English
-  //  Also attempt simple OCR-corruption fixes for
-  //  common Devanagari encoding errors from PDFs.
   // ═══════════════════════════════════════════════
   const DEVA_FIXES = [
-    // common OCR corruption: doubled consonant before matra → ki/ki-type errors
     [/कक/g,  'कि'], [/नन/g, 'नि'], [/लल/g, 'लि'], [/गग/g, 'गि'],
     [/रर/g,  'रि'], [/जज/g, 'जि'], [/मम/g, 'मि'], [/ससस/g,'सि'],
     [/बबब/g, 'बि'], [/ततत/g, 'ति'], [/ददद/g, 'दि'], [/फफ/g, 'फि'],
-    // space before nukta
-    [/ ़/g, '़'],
-    // double halant
-    [/््/g, '्'],
+    [/ ़/g, '़'], [/््/g, '्'],
   ];
 
   function fixDevanagari(s){
@@ -342,7 +299,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
   function isConfigured(){
     const m = document.querySelector('script[type="module"]');
-    return window._firebaseReady && m && !m.textContent.includes('YOUR_API_KEY');
+    return window._firebaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
   }
 
   // ═══════════════════════════════════════════════
@@ -364,16 +321,15 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     if(!isConfigured()){
       const w = document.createElement('div'); w.className = 'config-warning';
-      w.innerHTML = '<strong>⚙️ Setup required:</strong> Open this HTML in a text editor and replace <code>YOUR_*</code> with your Firebase project credentials.';
+      w.innerHTML = '<strong>⚙️ Setup required:</strong> Open this HTML in a text editor and replace <code>YOUR_SUPABASE_*</code> with your Supabase project credentials.';
       wrap.appendChild(w);
     }
     if(dbError){
       const e = document.createElement('div'); e.className = 'card';
-      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Firebase. Check config values and Firestore rules, then refresh.</span>';
+      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Supabase. Check config values and database policies, then refresh.</span>';
       wrap.appendChild(e);
     }
 
-    // 6 tabs
     const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
     [
       ['upload',  '📤 Upload'],
@@ -397,7 +353,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     if(activeTab === 'notices') wrap.appendChild(renderNotices());
 
     wrap.appendChild(Object.assign(document.createElement('footer'), {
-      textContent: 'Data syncs to your private Firebase project. Works on any device with this URL.'
+      textContent: 'Data syncs to your private database. Works on any device with this URL.'
     }));
     root.appendChild(wrap);
   }
@@ -432,7 +388,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
           const parsed = parseDiaryText(text);
           if(parsed && parsed.date && parsed.subjects.length){
             if(entries[parsed.date]) overwrote++;
-            entries[parsed.date] = parsed;   // always overwrite same date
+            entries[parsed.date] = parsed;
             okCount++;
           } else { failNames.push(f.name); }
         } catch(e){ console.error(e); failNames.push(f.name); }
@@ -451,7 +407,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
         status.textContent += (okCount ? ' | ' : '') + '⚠ Could not parse: ' + failNames.join(', ');
       }
       inp.value = '';
-      render(); // re-renders upload tab with updated pill counts
+      render();
     };
 
     const row = document.createElement('div'); row.className = 'row';
@@ -484,7 +440,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   }
 
   // ═══════════════════════════════════════════════
-  //  This Week tab — current Mon–Sun only
+  //  This Week tab
   // ═══════════════════════════════════════════════
   function renderCurWeek(){
     const wrap  = document.createElement('div');
@@ -507,11 +463,9 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       wrap.appendChild(c); return wrap;
     }
 
-    // Words of the Day this week
     const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
     if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
 
-    // Subject blocks this week
     const subjSet = new Set();
     weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
     Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
@@ -586,16 +540,10 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
   // ═══════════════════════════════════════════════
   //  HW Due tab
-  //  - Only future/today submission dates
-  //  - Subject-wise table with due date column
-  //  - Soonest due date first
   // ═══════════════════════════════════════════════
   function renderHW(){
     const wrap  = document.createElement('div');
     const tod   = today0();
-
-    // Collect pending reinforcement: future or today, reinforcement & submission both non-nil
-    // keyed by subject → [{entryDate, subTopic, reinforcement, submissionDate, submissionStr, diffDays}]
     const bySubject = {};
 
     sortedDates().forEach(entryDate => {
@@ -606,7 +554,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
         const subDt = parseDiaryDate(sub);
         if(!subDt) return;
         const diff = Math.round((subDt - tod) / 86400000);
-        if(diff < 0) return; // past — skip
+        if(diff < 0) return;
         if(!bySubject[s.subject]) bySubject[s.subject] = [];
         bySubject[s.subject].push({
           entryDate, subTopic: s.subTopic, reinforcement: rf,
@@ -624,13 +572,10 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     }
 
     subjects.forEach(subj => {
-      // Sort rows: soonest due date first
       const rows = bySubject[subj].sort((a,b) => a.submissionDt - b.submissionDt);
-
       const block = document.createElement('div'); block.className = 'subject-block';
       const hdr   = document.createElement('div'); hdr.className = 'subject-header';
 
-      // header colour based on the most urgent item
       const minDiff = rows[0].diff;
       if(minDiff === 0)      hdr.classList.add('hw-today-hdr');
       else if(minDiff <= 2)  hdr.classList.add('hw-soon-hdr');
