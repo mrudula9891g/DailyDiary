@@ -124,7 +124,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   let entries   = {};
   let activeTab = 'hw';
   let dbError   = false;
-  // State store for collapsed subjects in Summary view
+  // State store for collapsed subjects & blocks in Summary view
   let collapsedSubjects = {};
 
   // ═══════════════════════════════════════════════
@@ -308,7 +308,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     return window._supabaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
   }
 
-  // Helper to check if text contains test/revision keywords
   function isTestOrRevision(s){
     if(!s) return false;
     return /\b(revision|pt|periodic\s*test|exam|test|assessment|eval|evaluation|practice)\b/i.test(s);
@@ -464,7 +463,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     let totalFound = 0;
 
     allSubjects().forEach(subj => {
-      // Filter entries for this subject that have test/revision content
       const filteredDates = dates.filter(d => {
         return entries[d].subjects.some(s => 
           s.subject === subj && (
@@ -478,7 +476,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
       if(filteredDates.length > 0){
         totalFound += filteredDates.length;
-        // Build block filtering only the specific test/revision rows
         const block = document.createElement('div'); block.className = 'subject-block';
         const hdr   = document.createElement('div'); hdr.className = 'subject-header';
         
@@ -555,12 +552,13 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       wrap.appendChild(c); return wrap;
     }
 
-    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
-    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
-
     const subjSet = new Set();
     weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
     Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    // Shift Words of the Day to the bottom
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
 
     return wrap;
   }
@@ -592,18 +590,19 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       wrap.appendChild(c); return wrap;
     }
 
-    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
-    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
-
     const subjSet = new Set();
     weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
     Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    // Shift Words of the Day to the bottom
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
 
     return wrap;
   }
 
   // ═══════════════════════════════════════════════
-  //  Full Summary tab (With Subject Dropdowns Collapsed by Default)
+  //  Full Summary tab
   // ═══════════════════════════════════════════════
   function renderSummary(){
     const wrap  = document.createElement('div');
@@ -613,33 +612,56 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       c.textContent = 'No data yet — upload a diary PDF to get started.';
       wrap.appendChild(c); return wrap;
     }
-    const wdDates = dates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
-    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
 
-    // Render each subject heading as a collapsible dropdown (collapsed by default)
+    // Render subject headings first
     allSubjects().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, dates, true)));
+
+    // Words of the Day shifted to the bottom and made collapsible
+    const wdDates = dates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates, true));
+
     return wrap;
   }
 
   // ── shared block builders ─────────────────────
-  function buildWordsBlock(dates){
+  function buildWordsBlock(dates, isCollapsible = false){
+    const blockKey = '__words_of_the_day__';
     const block = document.createElement('div'); block.className = 'subject-block';
     const hdr   = document.createElement('div'); hdr.className = 'subject-header';
-    hdr.textContent = '📝 Words of the Day';
+
+    const isCollapsed = isCollapsible && (collapsedSubjects[blockKey] !== false);
+
+    if(isCollapsible){
+      hdr.classList.add('collapsible');
+      hdr.innerHTML = '<span>📝 Words of the Day <span class="badge">' + dates.length + ' day' + (dates.length !== 1 ? 's' : '') + '</span></span>'
+        + '<span class="chevron' + (isCollapsed ? ' collapsed' : '') + '">▼</span>';
+      hdr.onclick = () => {
+        collapsedSubjects[blockKey] = !isCollapsed;
+        render();
+      };
+    } else {
+      hdr.textContent = '📝 Words of the Day';
+    }
+
     block.appendChild(hdr);
-    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
-    const tbl = document.createElement('table');
-    tbl.innerHTML = '<tr><th>Date</th><th>🇬🇧 English</th><th>🇮🇳 Hindi</th></tr>';
-    dates.forEach(d => {
-      const e = entries[d];
-      const tr = document.createElement('tr');
-      const hiWords = (e.wordsHi && e.wordsHi.length) ? e.wordsHi.join(', ') : '—';
-      tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
-        + '<td>' + ((e.wordsEn && e.wordsEn.length) ? e.wordsEn.join(', ') : '—') + '</td>'
-        + '<td class="deva">' + hiWords + '</td>';
-      tbl.appendChild(tr);
-    });
-    scroll.appendChild(tbl); block.appendChild(scroll);
+
+    if(!isCollapsed){
+      const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+      const tbl = document.createElement('table');
+      tbl.innerHTML = '<tr><th>Date</th><th>🇬🇧 English</th><th>🇮🇳 Hindi</th></tr>';
+      dates.forEach(d => {
+        const e = entries[d];
+        const tr = document.createElement('tr');
+        const hiWords = (e.wordsHi && e.wordsHi.length) ? e.wordsHi.join(', ') : '—';
+        tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+          + '<td>' + ((e.wordsEn && e.wordsEn.length) ? e.wordsEn.join(', ') : '—') + '</td>'
+          + '<td class="deva">' + hiWords + '</td>';
+        tbl.appendChild(tr);
+      });
+      scroll.appendChild(tbl); 
+      block.appendChild(scroll);
+    }
+
     return block;
   }
 
@@ -652,7 +674,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
     
-    // Set to true if explicitly collapsed, OR default to collapsed if not specified yet
     const isCollapsed = isCollapsible && (collapsedSubjects[subj] !== false);
 
     if(isCollapsible){
@@ -710,7 +731,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
         const diff = Math.round((subDt - tod) / 86400000);
         if(diff < 0) return;
 
-        // Grouping key: Same Subject + Same Due Date
         const key = s.subject + '||' + sub;
 
         if(!map.has(key)){
@@ -740,7 +760,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       wrap.appendChild(c); return wrap;
     }
 
-    // Sort by Due Date ascending
     hwList.sort((a,b) => a.submissionDt - b.submissionDt);
 
     const block = document.createElement('div'); block.className = 'subject-block';
@@ -755,7 +774,6 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
     const tbl = document.createElement('table');
-    // Column Order: Subject, Exercises, Worksheet, Due Date, Diary Date
     tbl.innerHTML = '<tr><th>Subject</th><th>Exercises</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th></tr>';
 
     hwList.forEach(r => {
