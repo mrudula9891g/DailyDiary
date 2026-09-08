@@ -42,8 +42,8 @@ window._dbSave = async (entries) => {
   } catch(e) { console.error("save:", e); return false; }
 };
 
-window._firebaseReady = true;
-document.dispatchEvent(new Event("firebase-ready"));
+window._supabaseReady = true;
+document.dispatchEvent(new Event("supabase-ready"));
 </script>
 <style>
 :root{
@@ -299,7 +299,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
   function isConfigured(){
     const m = document.querySelector('script[type="module"]');
-    return window._firebaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
+    return window._supabaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
   }
 
   // ═══════════════════════════════════════════════
@@ -326,17 +326,18 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     }
     if(dbError){
       const e = document.createElement('div'); e.className = 'card';
-      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Supabase. Check config values and database policies, then refresh.</span>';
+      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Supabase. Check config values and table policies, then refresh.</span>';
       wrap.appendChild(e);
     }
 
     const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
     [
-      ['upload',  '📤 Upload'],
-      ['curweek', '📅 This Week'],
-      ['summary', '📋 Summary'],
-      ['hw',      '📌 HW Due'],
-      ['notices', '📢 Notices'],
+      ['upload',   '📤 Upload'],
+      ['curweek',  '📅 This Week'],
+      ['lastweek', '⏮️ Last Week'],
+      ['summary',  '📋 Summary'],
+      ['hw',       '📌 HW Due'],
+      ['notices',  '📢 Notices'],
     ].forEach(([key, label]) => {
       const t = document.createElement('div');
       t.className = 'tab' + (activeTab === key ? ' active' : '');
@@ -346,11 +347,12 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     });
     wrap.appendChild(tabBar);
 
-    if(activeTab === 'upload')  wrap.appendChild(renderUpload());
-    if(activeTab === 'curweek') wrap.appendChild(renderCurWeek());
-    if(activeTab === 'summary') wrap.appendChild(renderSummary());
-    if(activeTab === 'hw')      wrap.appendChild(renderHW());
-    if(activeTab === 'notices') wrap.appendChild(renderNotices());
+    if(activeTab === 'upload')   wrap.appendChild(renderUpload());
+    if(activeTab === 'curweek')  wrap.appendChild(renderCurWeek());
+    if(activeTab === 'lastweek') wrap.appendChild(renderLastWeek());
+    if(activeTab === 'summary')  wrap.appendChild(renderSummary());
+    if(activeTab === 'hw')       wrap.appendChild(renderHW());
+    if(activeTab === 'notices')  wrap.appendChild(renderNotices());
 
     wrap.appendChild(Object.assign(document.createElement('footer'), {
       textContent: 'Data syncs to your private database. Works on any device with this URL.'
@@ -474,6 +476,43 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   }
 
   // ═══════════════════════════════════════════════
+  //  Last Week tab
+  // ═══════════════════════════════════════════════
+  function renderLastWeek(){
+    const wrap  = document.createElement('div');
+    const today = today0();
+    const lastWeekDate = new Date(today);
+    lastWeekDate.setDate(today.getDate() - 7);
+    
+    const ws = weekStartOf(lastWeekDate);
+    const we = weekEndOf(ws);
+
+    const weekDates = sortedDates().filter(d => {
+      const dt = parseDiaryDate(d);
+      return dt && dt >= ws && dt <= we;
+    });
+
+    const chip = document.createElement('div'); chip.className = 'week-chip';
+    chip.textContent = '⏮️ Week of ' + fmtShort(ws) + ' – ' + fmtShort(we);
+    wrap.appendChild(chip);
+
+    if(!weekDates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.innerHTML = 'No diary data recorded for last week.';
+      wrap.appendChild(c); return wrap;
+    }
+
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
+
+    const subjSet = new Set();
+    weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
+    Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
   //  Full Summary tab
   // ═══════════════════════════════════════════════
   function renderSummary(){
@@ -539,12 +578,12 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   }
 
   // ═══════════════════════════════════════════════
-  //  HW Due tab
+  //  HW Due tab (Collated Table by Due Date)
   // ═══════════════════════════════════════════════
   function renderHW(){
     const wrap  = document.createElement('div');
     const tod   = today0();
-    const bySubject = {};
+    const hwList = [];
 
     sortedDates().forEach(entryDate => {
       entries[entryDate].subjects.forEach(s => {
@@ -555,56 +594,61 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
         if(!subDt) return;
         const diff = Math.round((subDt - tod) / 86400000);
         if(diff < 0) return;
-        if(!bySubject[s.subject]) bySubject[s.subject] = [];
-        bySubject[s.subject].push({
-          entryDate, subTopic: s.subTopic, reinforcement: rf,
-          submissionStr: sub, submissionDt: subDt, diff
+        
+        hwList.push({
+          subject: s.subject,
+          subTopic: s.subTopic,
+          reinforcement: rf,
+          submissionStr: sub,
+          submissionDt: subDt,
+          entryDate,
+          diff
         });
       });
     });
 
-    const subjects = Object.keys(bySubject).sort();
-
-    if(!subjects.length){
+    if(!hwList.length){
       const c = document.createElement('div'); c.className = 'card empty';
       c.textContent = 'No pending homework with a future due date. 🎉';
       wrap.appendChild(c); return wrap;
     }
 
-    subjects.forEach(subj => {
-      const rows = bySubject[subj].sort((a,b) => a.submissionDt - b.submissionDt);
-      const block = document.createElement('div'); block.className = 'subject-block';
-      const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+    // Sort by Due Date ascending
+    hwList.sort((a,b) => a.submissionDt - b.submissionDt);
 
-      const minDiff = rows[0].diff;
-      if(minDiff === 0)      hdr.classList.add('hw-today-hdr');
-      else if(minDiff <= 2)  hdr.classList.add('hw-soon-hdr');
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
 
-      hdr.innerHTML = subj + '<span class="badge">' + rows.length + ' pending</span>';
-      block.appendChild(hdr);
+    const minDiff = hwList[0].diff;
+    if(minDiff === 0)      hdr.classList.add('hw-today-hdr');
+    else if(minDiff <= 2)  hdr.classList.add('hw-soon-hdr');
 
-      const scroll = document.createElement('div'); scroll.className = 'table-scroll';
-      const tbl = document.createElement('table');
-      tbl.innerHTML = '<tr><th>Due Date</th><th>Diary Date</th><th>Sub Topic</th><th>Exercises</th></tr>';
+    hdr.innerHTML = 'Pending Homework Summary <span class="badge">' + hwList.length + ' item' + (hwList.length !== 1 ? 's' : '') + '</span>';
+    block.appendChild(hdr);
 
-      rows.forEach(r => {
-        const tr = document.createElement('tr');
-        let dueLbl = r.submissionStr;
-        if(r.diff === 0)      dueLbl += ' 🔴 Today';
-        else if(r.diff === 1) dueLbl += ' 🟡 Tomorrow';
-        else                  dueLbl += ' (' + r.diff + 'd)';
-        if(r.diff === 0) tr.className = 'due-today';
-        else if(r.diff <= 2) tr.className = 'due-soon';
-        tr.innerHTML = '<td style="white-space:nowrap;font-weight:600">' + dueLbl + '</td>'
-          + '<td style="white-space:nowrap">' + r.entryDate + '</td>'
-          + '<td>' + r.subTopic + '</td>'
-          + '<td>' + r.reinforcement + '</td>';
-        tbl.appendChild(tr);
-      });
+    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<tr><th>Subject</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th><th>Exercises</th></tr>';
 
-      scroll.appendChild(tbl); block.appendChild(scroll);
-      wrap.appendChild(block);
+    hwList.forEach(r => {
+      const tr = document.createElement('tr');
+      let dueLbl = r.submissionStr;
+      if(r.diff === 0)      dueLbl += ' 🔴 Today';
+      else if(r.diff === 1) dueLbl += ' 🟡 Tomorrow';
+      else                  dueLbl += ' (' + r.diff + 'd)';
+      if(r.diff === 0) tr.className = 'due-today';
+      else if(r.diff <= 2) tr.className = 'due-soon';
+      
+      tr.innerHTML = '<td><strong>' + r.subject + '</strong></td>'
+        + '<td>' + r.subTopic + '</td>'
+        + '<td style="white-space:nowrap;font-weight:600">' + dueLbl + '</td>'
+        + '<td style="white-space:nowrap">' + r.entryDate + '</td>'
+        + '<td>' + r.reinforcement + '</td>';
+      tbl.appendChild(tr);
     });
+
+    scroll.appendChild(tbl); block.appendChild(scroll);
+    wrap.appendChild(block);
 
     const leg = document.createElement('div'); leg.className = 'legend';
     leg.innerHTML = '<span>🔴 Due today</span><span>🟡 Due within 2 days</span><span>✅ Upcoming</span>';
@@ -662,8 +706,8 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   // ═══════════════════════════════════════════════
   async function init(){
     await new Promise(resolve => {
-      if(window._firebaseReady){ resolve(); return; }
-      document.addEventListener('firebase-ready', resolve, {once:true});
+      if(window._supabaseReady){ resolve(); return; }
+      document.addEventListener('supabase-ready', resolve, {once:true});
       setTimeout(resolve, 4000);
     });
     root.innerHTML = '<div class="empty"><span class="spinner"></span> Loading saved data…</div>';
