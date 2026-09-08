@@ -332,12 +332,12 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
     [
-      ['upload',   '📤 Upload'],
+      ['hw',       '📌 HW Due'],
       ['curweek',  '📅 This Week'],
       ['lastweek', '⏮️ Last Week'],
       ['summary',  '📋 Summary'],
-      ['hw',       '📌 HW Due'],
       ['notices',  '📢 Notices'],
+      ['upload',   '📤 Upload'],
     ].forEach(([key, label]) => {
       const t = document.createElement('div');
       t.className = 'tab' + (activeTab === key ? ' active' : '');
@@ -628,7 +628,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
     const tbl = document.createElement('table');
-    tbl.innerHTML = '<tr><th>Subject</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th><th>Exercises</th></tr>';
+    tbl.innerHTML = '<tr><th>Subject</th><th>Exercises</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th></tr>';
 
     hwList.forEach(r => {
       const tr = document.createElement('tr');
