@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📒 School Diary Tracker</title>
+<!-- Noto Sans Devanagari for correct Hindi rendering -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+// ─────────────────────────────────────────────
+// 🔧 PASTE YOUR SUPABASE CONFIG HERE
+// ─────────────────────────────────────────────
+const SUPABASE_URL = "https://yagdiilvhtliizkpmqni.supabase.co";
+const SUPABASE_KEY = "sb_publishable_zsAvy8ElJbA8cHP5J6rvPA_w-0lFrvZYOUR_SUPABASE_ANON_KEY";
+// ─────────────────────────────────────────────
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+window._dbLoad = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('diary')
+      .select('data')
+      .eq('id', 'grade3')
+      .single();
+    if (error && error.code !== 'PGRST116') { console.error("load:", error); return null; }
+    return data ? data.data.entries || {} : {};
+  } catch(e) { console.error("load:", e); return null; }
+};
+
+window._dbSave = async (entries) => {
+  try {
+    const { error } = await supabase
+      .from('diary')
+      .upsert({ id: 'grade3', data: { entries, updatedAt: new Date().toISOString() } });
+    if (error) { console.error("save:", error); return false; }
+    return true;
+  } catch(e) { console.error("save:", e); return false; }
+};
+
+window._firebaseReady = true;
+document.dispatchEvent(new Event("firebase-ready"));
+</script>
+<!-- <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ─────────────────────────────────────────────
+// 🔧 PASTE YOUR FIREBASE CONFIG HERE
+// ─────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+// ─────────────────────────────────────────────
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const DOC_REF = doc(db, "diary", "grade3");
+
+window._dbLoad = async () => {
+  try {
+    const snap = await getDoc(DOC_REF);
+    return snap.exists() ? snap.data().entries || {} : {};
+  } catch(e) { console.error("load:", e); return null; }
+};
+window._dbSave = async (entries) => {
+  try {
+    await setDoc(DOC_REF, { entries, updatedAt: new Date().toISOString() });
+    return true;
+  } catch(e) { console.error("save:", e); return false; }
+};
+window._firebaseReady = true;
+document.dispatchEvent(new Event("firebase-ready")); -->
+<!-- </script> -->
+<style>
+:root{
+  --bg:#f6f7fb; --card:#fff; --ink:#1f2430; --muted:#6b7280;
+  --accent:#4472C4; --accent-dark:#2f57a0; --line:#e6e8ee;
+  --good:#1f9d55; --warn:#c0392b; --warn-bg:#fdecea;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ background:var(--bg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; color:var(--ink); }
+.deva{ font-family:"Noto Sans Devanagari",Arial,sans-serif; font-size:0.95em; }
+#app-root{ width:92%; max-width:1100px; min-width:300px; margin:0 auto; padding:10px 0 40px; }
+h1{ font-size:1.18rem; margin:6px 0 2px; line-height:1.35; }
+.updated-lbl{ font-size:0.7rem; color:var(--muted); font-weight:400; }
+.sub{ color:var(--muted); font-size:0.79rem; margin-bottom:12px; }
+.card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.upload-box{ border:2px dashed #b9c6e6; border-radius:14px; padding:22px 14px; text-align:center; background:#f4f7fd; cursor:pointer; transition:background .15s; }
+.upload-box:hover,.upload-box:active{ background:#eaf0fb; }
+.upload-box input{ display:none; }
+.upload-icon{ font-size:2rem; }
+.btn{ display:inline-block; background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 14px; font-size:0.86rem; font-weight:600; cursor:pointer; }
+.btn:active{ background:var(--accent-dark); }
+.btn.secondary{ background:#eef1f7; color:var(--ink); }
+.btn.danger{ background:var(--warn-bg); color:var(--warn); }
+.row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.status{ font-size:0.82rem; margin-top:10px; color:var(--muted); min-height:20px; line-height:1.4; }
+.status.err{ color:var(--warn); }
+.status.ok{ color:var(--good); }
+.pill{ display:inline-block; background:#eef1f9; border-radius:999px; padding:2px 9px; font-size:0.68rem; color:var(--accent-dark); margin:2px 2px 0 0; }
+.empty{ color:var(--muted); text-align:center; padding:32px 10px; font-size:0.9rem; }
+/* Tab bar – horizontally scrollable on mobile */
+.tab-bar{ display:flex; gap:5px; margin-bottom:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:3px; }
+.tab-bar::-webkit-scrollbar{ height:3px; }
+.tab{ flex:0 0 auto; text-align:center; padding:9px 12px; border-radius:10px; background:#eef1f7; font-size:0.76rem; font-weight:600; cursor:pointer; color:var(--muted); white-space:nowrap; }
+.tab.active{ background:var(--accent); color:#fff; }
+/* Tables */
+table{ width:100%; border-collapse:collapse; font-size:0.79rem; }
+th,td{ border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+th{ background:#eef1f9; font-weight:600; }
+.subject-block{ margin-bottom:14px; border-radius:10px; overflow:hidden; border:1px solid var(--line); }
+.subject-header{ background:var(--accent); color:#fff; font-weight:700; padding:8px 12px; font-size:0.88rem; display:flex; justify-content:space-between; align-items:center; }
+.subject-block table{ border:none; }
+.subject-block th,.subject-block td{ border-color:#eef0f5; }
+.table-scroll{ overflow-x:auto; }
+/* HW due colours */
+.due-today{ background:#fff1f1; }
+.due-soon{ background:#fffbeb; }
+.due-ok{ }
+.hw-overdue-hdr{ background:#b91c1c !important; }
+.hw-today-hdr{ background:#dc2626 !important; }
+.hw-soon-hdr{ background:#b45309 !important; }
+/* Notices */
+.notice-item{ border-bottom:1px solid var(--line); padding:9px 0; font-size:0.82rem; }
+.notice-item:last-child{ border-bottom:none; }
+.notice-date{ font-weight:700; color:var(--accent-dark); margin-right:6px; }
+/* Spinner */
+.spinner{ display:inline-block; width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:5px; }
+@keyframes spin{ to{ transform:rotate(360deg) } }
+.config-warning{ background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:12px; font-size:0.79rem; margin-bottom:14px; line-height:1.6; }
+.config-warning strong{ color:#b45309; }
+.week-chip{ background:#e8f0fe; border-radius:8px; padding:5px 12px; font-size:0.78rem; color:var(--accent-dark); font-weight:600; margin-bottom:12px; display:inline-block; }
+.badge{ display:inline-block; font-size:0.63rem; background:rgba(255,255,255,0.25); border-radius:6px; padding:1px 6px; margin-left:6px; font-weight:400; }
+.legend{ font-size:0.72rem; color:var(--muted); margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+.legend span{ background:#f3f4f6; border-radius:6px; padding:2px 8px; }
+footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div id="app-root"><div class="empty"><span class="spinner"></span> Connecting…</div></div>
+<script>
+(function(){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const root = document.getElementById('app-root');
+  let entries   = {};
+  let activeTab = 'upload';
+  let dbError   = false;
+
+  // ═══════════════════════════════════════════════
+  //  Firebase
+  // ═══════════════════════════════════════════════
+  async function loadEntries(){
+    if(!window._dbLoad) return false;
+    const res = await window._dbLoad();
+    if(res === null){ dbError = true; return false; }
+    entries = res;
+    return true;
+  }
+  async function saveEntries(){
+    if(!window._dbSave) return false;
+    return await window._dbSave(entries);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Subject normalisation
+  //  EP / SP / SPA always kept separate.
+  // ═══════════════════════════════════════════════
+  function normaliseSubject(raw){
+    const low = raw.trim().toLowerCase().replace(/[\s()\-_]/g,'');
+    if(low === 'ep')  return 'EP';
+    if(low === 'spa') return 'SPA';
+    if(low === 'sp')  return 'SP';
+    if(low.startsWith('socialscience') || low.startsWith('social')) return 'Social Science';
+    if(low.startsWith('languageart'))  return 'Language Art';
+    if(low.startsWith('literature'))   return 'Literature';
+    if(low.startsWith('math'))         return 'Math';
+    if(low.startsWith('computer'))     return 'Computer';
+    if(low.startsWith('hindi'))        return 'Hindi';
+    if(low.startsWith('marathi'))      return 'Marathi';
+    if(low.startsWith('assembly'))     return 'Assembly';
+    if(low.startsWith('library'))      return 'Library';
+    if(low.startsWith('science'))      return 'Science';
+    if(low.startsWith('english'))      return 'English';
+    if(low.startsWith('evs'))          return 'EVS';
+    if(low.startsWith('art'))          return 'Art';
+    if(low.startsWith('pe') || low.startsWith('physicaleducation')) return 'PE';
+    if(low.startsWith('music'))        return 'Music';
+    // strip trailing (Support) / (S) / (L) qualifiers
+    return raw.trim().replace(/\s*\(.*\)\s*$/, '').trim() || raw.trim();
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Words: split Hindi (Devanagari) vs English
+  //  Also attempt simple OCR-corruption fixes for
+  //  common Devanagari encoding errors from PDFs.
+  // ═══════════════════════════════════════════════
+  const DEVA_FIXES = [
+    // common OCR corruption: doubled consonant before matra → ki/ki-type errors
+    [/कक/g,  'कि'], [/नन/g, 'नि'], [/लल/g, 'लि'], [/गग/g, 'गि'],
+    [/रर/g,  'रि'], [/जज/g, 'जि'], [/मम/g, 'मि'], [/ससस/g,'सि'],
+    [/बबब/g, 'बि'], [/ततत/g, 'ति'], [/ददद/g, 'दि'], [/फफ/g, 'फि'],
+    // space before nukta
+    [/ ़/g, '़'],
+    // double halant
+    [/््/g, '्'],
+  ];
+
+  function fixDevanagari(s){
+    DEVA_FIXES.forEach(([re, rep]) => { s = s.replace(re, rep); });
+    return s.trim();
+  }
+
+  function splitWords(str){
+    const english = [], hindi = [];
+    str.split(/[,،]/).forEach(w => {
+      w = w.trim();
+      if(!w) return;
+      if(/[\u0900-\u097F]/.test(w)) hindi.push(fixDevanagari(w));
+      else english.push(w);
+    });
+    return { english, hindi };
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PDF extraction + parsing
+  // ═══════════════════════════════════════════════
+  async function extractTextFromPdf(file){
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    let full = '';
+    for(let i = 1; i <= pdf.numPages; i++){
+      const page    = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      full += content.items.map(it => it.str).join(' ') + '\n';
+    }
+    return full;
+  }
+
+  function cleanField(s){
+    if(!s) return 'NIL';
+    s = s.replace(/\s+/g, ' ').trim();
+    s = s.split(/Dear Parent|Words of the Day|Additional\s*$/i)[0].trim();
+    if(s.length > 200) s = s.slice(0, 200).trim();
+    return s.length ? s : 'NIL';
+  }
+
+  const RECORD_RE = /Subject\s+(.*?)\s*Topic\s+(.*?)\s*Sub Topic\s+(.*?)\s*CW\s+(.*?)\s*Reinforcement\s+(.*?)\s*Submission date\s+(.*?)(?=Subject\s|$)/gs;
+
+  function parseDiaryText(text){
+    const dateMatch = text.match(/Date\s*:?\s*(\d{1,2}-[A-Za-z]{3}-\d{2,4})/);
+    if(!dateMatch) return null;
+    const date = dateMatch[1];
+
+    const subjects = [];
+    let m;
+    RECORD_RE.lastIndex = 0;
+    while((m = RECORD_RE.exec(text)) !== null){
+      subjects.push({
+        subject:       normaliseSubject(cleanField(m[1])),
+        topic:         cleanField(m[2]),
+        subTopic:      cleanField(m[3]),
+        cw:            cleanField(m[4]),
+        reinforcement: cleanField(m[5]),
+        submission:    cleanField(m[6])
+      });
+      if(m.index === RECORD_RE.lastIndex) RECORD_RE.lastIndex++;
+    }
+
+    let noticeText = '';
+    const aIdx = text.search(/Additional\s*[Ii]nformation/);
+    if(aIdx > -1){
+      noticeText = text.substring(aIdx).replace(/Additional\s*[Ii]nformation/, '').trim();
+      const cut = noticeText.search(/Words of the Day/i);
+      if(cut > -1) noticeText = noticeText.slice(0, cut);
+      noticeText = noticeText.replace(/\s+/g, ' ').trim().slice(0, 500);
+    }
+
+    let wordsRaw = '';
+    const wIdx = text.search(/Words of the Day/i);
+    if(wIdx > -1){
+      wordsRaw = text.slice(wIdx).replace(/Words of the Day/i, '').trim();
+      wordsRaw = wordsRaw.split('\n')[0].replace(/\s+/g, ' ').trim().slice(0, 300);
+    }
+    const { english: wordsEn, hindi: wordsHi } = splitWords(wordsRaw);
+
+    return { date, subjects, notice: noticeText, wordsEn, wordsHi };
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Date helpers
+  // ═══════════════════════════════════════════════
+  const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+  function parseDiaryDate(str){
+    const m = str.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+    if(!m) return null;
+    const mo = MON[m[2].toLowerCase()];
+    if(mo === undefined) return null;
+    let yr = parseInt(m[3], 10);
+    if(yr < 100) yr += 2000;
+    return new Date(yr, mo, parseInt(m[1], 10));
+  }
+
+  function today0(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+
+  function weekStartOf(d){
+    const day = d.getDay();
+    const s   = new Date(d);
+    s.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    s.setHours(0,0,0,0);
+    return s;
+  }
+  function weekEndOf(ws){ const e = new Date(ws); e.setDate(ws.getDate() + 6); e.setHours(23,59,59,999); return e; }
+
+  function fmtShort(d){ return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+
+  function sortedDates(){
+    return Object.keys(entries).sort((a,b)=>{
+      const da = parseDiaryDate(a), db = parseDiaryDate(b);
+      return (da && db) ? da - db : a.localeCompare(b);
+    });
+  }
+
+  function allSubjects(){
+    const s = new Set();
+    Object.values(entries).forEach(e => e.subjects.forEach(r => s.add(r.subject)));
+    return Array.from(s).sort();
+  }
+
+  function latestDate(){ const d = sortedDates(); return d.length ? d[d.length-1] : null; }
+
+  function isConfigured(){
+    const m = document.querySelector('script[type="module"]');
+    return window._firebaseReady && m && !m.textContent.includes('YOUR_API_KEY');
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Root render
+  // ═══════════════════════════════════════════════
+  function render(){
+    root.innerHTML = '';
+    const wrap = document.createElement('div');
+
+    const ld  = latestDate();
+    const h1  = document.createElement('h1');
+    h1.innerHTML = '📒 School Diary Tracker'
+      + (ld ? ' <span class="updated-lbl">· updated ' + ld + '</span>' : '');
+    wrap.appendChild(h1);
+
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = "Upload each day's diary PDF — it gets added to your subject-wise summary.";
+    wrap.appendChild(sub);
+
+    if(!isConfigured()){
+      const w = document.createElement('div'); w.className = 'config-warning';
+      w.innerHTML = '<strong>⚙️ Setup required:</strong> Open this HTML in a text editor and replace <code>YOUR_*</code> with your Firebase project credentials.';
+      wrap.appendChild(w);
+    }
+    if(dbError){
+      const e = document.createElement('div'); e.className = 'card';
+      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Firebase. Check config values and Firestore rules, then refresh.</span>';
+      wrap.appendChild(e);
+    }
+
+    // 6 tabs
+    const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
+    [
+      ['upload',  '📤 Upload'],
+      ['curweek', '📅 This Week'],
+      ['summary', '📋 Summary'],
+      ['hw',      '📌 HW Due'],
+      ['notices', '📢 Notices'],
+    ].forEach(([key, label]) => {
+      const t = document.createElement('div');
+      t.className = 'tab' + (activeTab === key ? ' active' : '');
+      t.textContent = label;
+      t.onclick = () => { activeTab = key; render(); };
+      tabBar.appendChild(t);
+    });
+    wrap.appendChild(tabBar);
+
+    if(activeTab === 'upload')  wrap.appendChild(renderUpload());
+    if(activeTab === 'curweek') wrap.appendChild(renderCurWeek());
+    if(activeTab === 'summary') wrap.appendChild(renderSummary());
+    if(activeTab === 'hw')      wrap.appendChild(renderHW());
+    if(activeTab === 'notices') wrap.appendChild(renderNotices());
+
+    wrap.appendChild(Object.assign(document.createElement('footer'), {
+      textContent: 'Data syncs to your private Firebase project. Works on any device with this URL.'
+    }));
+    root.appendChild(wrap);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Upload tab
+  // ═══════════════════════════════════════════════
+  function renderUpload(){
+    const card = document.createElement('div'); card.className = 'card';
+
+    const box = document.createElement('label'); box.className = 'upload-box';
+    box.innerHTML = '<div class="upload-icon">📤</div>'
+      + '<div style="margin-top:8px;font-weight:600;">Tap to upload diary PDF(s)</div>'
+      + '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">You can select multiple files at once</div>';
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/pdf'; inp.multiple = true;
+    box.appendChild(inp); card.appendChild(box);
+
+    const status = document.createElement('div'); status.className = 'status';
+    card.appendChild(status);
+
+    inp.onchange = async () => {
+      const files = Array.from(inp.files || []);
+      if(!files.length) return;
+      status.className = 'status';
+      status.innerHTML = '<span class="spinner"></span>Reading ' + files.length + ' file(s)…';
+
+      let okCount = 0, overwrote = 0, failNames = [];
+      for(const f of files){
+        try{
+          const text   = await extractTextFromPdf(f);
+          const parsed = parseDiaryText(text);
+          if(parsed && parsed.date && parsed.subjects.length){
+            if(entries[parsed.date]) overwrote++;
+            entries[parsed.date] = parsed;   // always overwrite same date
+            okCount++;
+          } else { failNames.push(f.name); }
+        } catch(e){ console.error(e); failNames.push(f.name); }
+      }
+
+      status.innerHTML = '<span class="spinner"></span>Saving to cloud…';
+      const saved = await saveEntries();
+      if(okCount){
+        status.className = 'status ok';
+        status.textContent = '✓ ' + okCount + ' day(s) saved'
+          + (overwrote ? ' (' + overwrote + ' day(s) overwritten)' : '')
+          + (saved ? '' : ' — cloud save failed, check config');
+      }
+      if(failNames.length){
+        status.className = 'status err';
+        status.textContent += (okCount ? ' | ' : '') + '⚠ Could not parse: ' + failNames.join(', ');
+      }
+      inp.value = '';
+      render(); // re-renders upload tab with updated pill counts
+    };
+
+    const row = document.createElement('div'); row.className = 'row';
+    const vBtn = document.createElement('button'); vBtn.className = 'btn';
+    vBtn.textContent = 'View Summary →';
+    vBtn.onclick = () => { activeTab = 'summary'; render(); };
+    row.appendChild(vBtn);
+
+    const cBtn = document.createElement('button'); cBtn.className = 'btn secondary';
+    cBtn.textContent = 'Export CSV'; cBtn.onclick = exportCsv;
+    row.appendChild(cBtn);
+
+    const rBtn = document.createElement('button'); rBtn.className = 'btn danger';
+    rBtn.textContent = 'Clear all';
+    rBtn.onclick = async () => {
+      if(confirm('Delete ALL saved diary entries? This cannot be undone.')){
+        entries = {}; await saveEntries(); render();
+      }
+    };
+    row.appendChild(rBtn);
+    card.appendChild(row);
+
+    const count = Object.keys(entries).length;
+    const info  = document.createElement('div'); info.style.marginTop = '10px';
+    info.innerHTML = count
+      ? '<span class="pill">' + count + ' day(s) saved</span><span class="pill">' + allSubjects().length + ' subjects</span>'
+      : '<span style="color:var(--muted);font-size:0.82rem;">No entries yet.</span>';
+    card.appendChild(info);
+    return card;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  This Week tab — current Mon–Sun only
+  // ═══════════════════════════════════════════════
+  function renderCurWeek(){
+    const wrap  = document.createElement('div');
+    const today = today0();
+    const ws    = weekStartOf(today);
+    const we    = weekEndOf(ws);
+
+    const weekDates = sortedDates().filter(d => {
+      const dt = parseDiaryDate(d);
+      return dt && dt >= ws && dt <= we;
+    });
+
+    const chip = document.createElement('div'); chip.className = 'week-chip';
+    chip.textContent = '📅 Week of ' + fmtShort(ws) + ' – ' + fmtShort(we);
+    wrap.appendChild(chip);
+
+    if(!weekDates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.innerHTML = 'No diary uploaded for this week yet.<br><span style="font-size:0.78rem;">Upload a PDF to see updates here.</span>';
+      wrap.appendChild(c); return wrap;
+    }
+
+    // Words of the Day this week
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
+
+    // Subject blocks this week
+    const subjSet = new Set();
+    weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
+    Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Full Summary tab
+  // ═══════════════════════════════════════════════
+  function renderSummary(){
+    const wrap  = document.createElement('div');
+    const dates = sortedDates();
+    if(!dates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No data yet — upload a diary PDF to get started.';
+      wrap.appendChild(c); return wrap;
+    }
+    const wdDates = dates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
+    allSubjects().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, dates)));
+    return wrap;
+  }
+
+  // ── shared block builders ─────────────────────
+  function buildWordsBlock(dates){
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+    hdr.textContent = '📝 Words of the Day';
+    block.appendChild(hdr);
+    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<tr><th>Date</th><th>🇬🇧 English</th><th>🇮🇳 Hindi</th></tr>';
+    dates.forEach(d => {
+      const e = entries[d];
+      const tr = document.createElement('tr');
+      const hiWords = (e.wordsHi && e.wordsHi.length) ? e.wordsHi.join(', ') : '—';
+      tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+        + '<td>' + ((e.wordsEn && e.wordsEn.length) ? e.wordsEn.join(', ') : '—') + '</td>'
+        + '<td class="deva">' + hiWords + '</td>';
+      tbl.appendChild(tr);
+    });
+    scroll.appendChild(tbl); block.appendChild(scroll);
+    return block;
+  }
+
+  function buildSubjectBlock(subj, dates){
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+    let rowCount = 0;
+    dates.forEach(d => { rowCount += entries[d].subjects.filter(s => s.subject === subj).length; });
+    hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span>';
+    block.appendChild(hdr);
+    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
+    dates.forEach(d => {
+      entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+          + '<td>' + s.topic + '</td>'
+          + '<td>' + s.subTopic + '</td>'
+          + '<td>' + s.cw + '</td>'
+          + '<td>' + s.reinforcement + '</td>'
+          + '<td style="white-space:nowrap">' + s.submission + '</td>';
+        tbl.appendChild(tr);
+      });
+    });
+    scroll.appendChild(tbl); block.appendChild(scroll);
+    return block;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  HW Due tab
+  //  - Only future/today submission dates
+  //  - Subject-wise table with due date column
+  //  - Soonest due date first
+  // ═══════════════════════════════════════════════
+  function renderHW(){
+    const wrap  = document.createElement('div');
+    const tod   = today0();
+
+    // Collect pending reinforcement: future or today, reinforcement & submission both non-nil
+    // keyed by subject → [{entryDate, subTopic, reinforcement, submissionDate, submissionStr, diffDays}]
+    const bySubject = {};
+
+    sortedDates().forEach(entryDate => {
+      entries[entryDate].subjects.forEach(s => {
+        const rf  = s.reinforcement.trim();
+        const sub = s.submission.trim();
+        if(/^(nil|na|-)$/i.test(rf) || /^(nil|na|-)$/i.test(sub)) return;
+        const subDt = parseDiaryDate(sub);
+        if(!subDt) return;
+        const diff = Math.round((subDt - tod) / 86400000);
+        if(diff < 0) return; // past — skip
+        if(!bySubject[s.subject]) bySubject[s.subject] = [];
+        bySubject[s.subject].push({
+          entryDate, subTopic: s.subTopic, reinforcement: rf,
+          submissionStr: sub, submissionDt: subDt, diff
+        });
+      });
+    });
+
+    const subjects = Object.keys(bySubject).sort();
+
+    if(!subjects.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No pending homework with a future due date. 🎉';
+      wrap.appendChild(c); return wrap;
+    }
+
+    subjects.forEach(subj => {
+      // Sort rows: soonest due date first
+      const rows = bySubject[subj].sort((a,b) => a.submissionDt - b.submissionDt);
+
+      const block = document.createElement('div'); block.className = 'subject-block';
+      const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+
+      // header colour based on the most urgent item
+      const minDiff = rows[0].diff;
+      if(minDiff === 0)      hdr.classList.add('hw-today-hdr');
+      else if(minDiff <= 2)  hdr.classList.add('hw-soon-hdr');
+
+      hdr.innerHTML = subj + '<span class="badge">' + rows.length + ' pending</span>';
+      block.appendChild(hdr);
+
+      const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+      const tbl = document.createElement('table');
+      tbl.innerHTML = '<tr><th>Due Date</th><th>Diary Date</th><th>Sub Topic</th><th>Exercises</th></tr>';
+
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        let dueLbl = r.submissionStr;
+        if(r.diff === 0)      dueLbl += ' 🔴 Today';
+        else if(r.diff === 1) dueLbl += ' 🟡 Tomorrow';
+        else                  dueLbl += ' (' + r.diff + 'd)';
+        if(r.diff === 0) tr.className = 'due-today';
+        else if(r.diff <= 2) tr.className = 'due-soon';
+        tr.innerHTML = '<td style="white-space:nowrap;font-weight:600">' + dueLbl + '</td>'
+          + '<td style="white-space:nowrap">' + r.entryDate + '</td>'
+          + '<td>' + r.subTopic + '</td>'
+          + '<td>' + r.reinforcement + '</td>';
+        tbl.appendChild(tr);
+      });
+
+      scroll.appendChild(tbl); block.appendChild(scroll);
+      wrap.appendChild(block);
+    });
+
+    const leg = document.createElement('div'); leg.className = 'legend';
+    leg.innerHTML = '<span>🔴 Due today</span><span>🟡 Due within 2 days</span><span>✅ Upcoming</span>';
+    wrap.appendChild(leg);
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Notices tab
+  // ═══════════════════════════════════════════════
+  function renderNotices(){
+    const card = document.createElement('div'); card.className = 'card';
+    const dates = sortedDates().filter(d => entries[d].notice);
+    if(!dates.length){
+      card.className = 'card empty'; card.textContent = 'No notices captured yet.'; return card;
+    }
+    dates.slice().reverse().forEach(d => {
+      const item = document.createElement('div'); item.className = 'notice-item';
+      item.innerHTML = '<span class="notice-date">' + d + '</span>'
+        + '<div style="margin-top:4px">' + entries[d].notice + '</div>';
+      card.appendChild(item);
+    });
+    return card;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  CSV export
+  // ═══════════════════════════════════════════════
+  function exportCsv(){
+    const dates = sortedDates();
+    const rows  = [['Subject','Diary Date','Topic','Sub Topic','CW','Reinforcement','Submission Date']];
+    allSubjects().forEach(subj => {
+      dates.forEach(d => {
+        entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
+          rows.push([subj, d, s.topic, s.subTopic, s.cw, s.reinforcement, s.submission]);
+        });
+      });
+    });
+    dates.forEach(d => {
+      const e = entries[d];
+      if(e.wordsEn && e.wordsEn.length) rows.push(['Words – English', d, e.wordsEn.join(', '),'','','','']);
+      if(e.wordsHi && e.wordsHi.length) rows.push(['Words – Hindi',   d, e.wordsHi.join(', '),'','','','']);
+    });
+    const csv  = rows.map(r => r.map(c => '"' + String(c||'').replace(/"/g,'""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'diary_summary.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Bootstrap
+  // ═══════════════════════════════════════════════
+  async function init(){
+    await new Promise(resolve => {
+      if(window._firebaseReady){ resolve(); return; }
+      document.addEventListener('firebase-ready', resolve, {once:true});
+      setTimeout(resolve, 4000);
+    });
+    root.innerHTML = '<div class="empty"><span class="spinner"></span> Loading saved data…</div>';
+    await loadEntries();
+    render();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
