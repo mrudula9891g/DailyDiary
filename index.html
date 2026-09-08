@@ -78,15 +78,19 @@ h1{ font-size:1.18rem; margin:6px 0 2px; line-height:1.35; }
 .tab-bar::-webkit-scrollbar{ height:3px; }
 .tab{ flex:0 0 auto; text-align:center; padding:9px 12px; border-radius:10px; background:#eef1f7; font-size:0.76rem; font-weight:600; cursor:pointer; color:var(--muted); white-space:nowrap; }
 .tab.active{ background:var(--accent); color:#fff; }
-/* Tables */
+/* Tables & Accordions */
 table{ width:100%; border-collapse:collapse; font-size:0.79rem; }
 th,td{ border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
 th{ background:#eef1f9; font-weight:600; }
-.subject-block{ margin-bottom:14px; border-radius:10px; overflow:hidden; border:1px solid var(--line); }
-.subject-header{ background:var(--accent); color:#fff; font-weight:700; padding:8px 12px; font-size:0.88rem; display:flex; justify-content:space-between; align-items:center; }
+.subject-block{ margin-bottom:14px; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:#fff; }
+.subject-header{ background:var(--accent); color:#fff; font-weight:700; padding:10px 12px; font-size:0.88rem; display:flex; justify-content:space-between; align-items:center; }
+.subject-header.collapsible{ cursor:pointer; user-select:none; }
+.subject-header.collapsible:hover{ background:var(--accent-dark); }
 .subject-block table{ border:none; }
 .subject-block th,.subject-block td{ border-color:#eef0f5; }
 .table-scroll{ overflow-x:auto; }
+.chevron{ transition:transform 0.2s ease; display:inline-block; margin-left:8px; font-size:0.75rem; }
+.chevron.collapsed{ transform:rotate(-90deg); }
 /* HW due colours */
 .due-today{ background:#fff1f1; }
 .due-soon{ background:#fffbeb; }
@@ -120,6 +124,8 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   let entries   = {};
   let activeTab = 'hw';
   let dbError   = false;
+  // State store for collapsed subjects in Summary view
+  let collapsedSubjects = {};
 
   // ═══════════════════════════════════════════════
   //  Database Handlers
@@ -302,6 +308,12 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     return window._supabaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
   }
 
+  // Helper to check if text contains test/revision keywords
+  function isTestOrRevision(s){
+    if(!s) return false;
+    return /\b(revision|pt|periodic\s*test|exam|test|assessment|eval|evaluation|practice)\b/i.test(s);
+  }
+
   // ═══════════════════════════════════════════════
   //  Root render
   // ═══════════════════════════════════════════════
@@ -333,6 +345,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
     [
       ['hw',       '📌 HW Due'],
+      ['tests',    '📝 Tests & Revision'],
       ['curweek',  '📅 This Week'],
       ['lastweek', '⏮️ Last Week'],
       ['summary',  '📋 Summary'],
@@ -348,6 +361,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     wrap.appendChild(tabBar);
 
     if(activeTab === 'upload')   wrap.appendChild(renderUpload());
+    if(activeTab === 'tests')    wrap.appendChild(renderTestsAndRevision());
     if(activeTab === 'curweek')  wrap.appendChild(renderCurWeek());
     if(activeTab === 'lastweek') wrap.appendChild(renderLastWeek());
     if(activeTab === 'summary')  wrap.appendChild(renderSummary());
@@ -442,6 +456,82 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   }
 
   // ═══════════════════════════════════════════════
+  //  Tests & Revision Tab
+  // ═══════════════════════════════════════════════
+  function renderTestsAndRevision(){
+    const wrap = document.createElement('div');
+    const dates = sortedDates();
+    let totalFound = 0;
+
+    allSubjects().forEach(subj => {
+      // Filter entries for this subject that have test/revision content
+      const filteredDates = dates.filter(d => {
+        return entries[d].subjects.some(s => 
+          s.subject === subj && (
+            isTestOrRevision(s.topic) ||
+            isTestOrRevision(s.subTopic) ||
+            isTestOrRevision(s.cw) ||
+            isTestOrRevision(s.reinforcement)
+          )
+        );
+      });
+
+      if(filteredDates.length > 0){
+        totalFound += filteredDates.length;
+        // Build block filtering only the specific test/revision rows
+        const block = document.createElement('div'); block.className = 'subject-block';
+        const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+        
+        let rowCount = 0;
+        filteredDates.forEach(d => {
+          rowCount += entries[d].subjects.filter(s => 
+            s.subject === subj && (
+              isTestOrRevision(s.topic) || isTestOrRevision(s.subTopic) || 
+              isTestOrRevision(s.cw) || isTestOrRevision(s.reinforcement)
+            )
+          ).length;
+        });
+
+        hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' test/revision item' + (rowCount !== 1 ? 's' : '') + '</span>';
+        block.appendChild(hdr);
+
+        const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+        const tbl = document.createElement('table');
+        tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
+
+        filteredDates.forEach(d => {
+          entries[d].subjects.filter(s => 
+            s.subject === subj && (
+              isTestOrRevision(s.topic) || isTestOrRevision(s.subTopic) || 
+              isTestOrRevision(s.cw) || isTestOrRevision(s.reinforcement)
+            )
+          ).forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+              + '<td>' + s.topic + '</td>'
+              + '<td>' + s.subTopic + '</td>'
+              + '<td>' + s.cw + '</td>'
+              + '<td>' + s.reinforcement + '</td>'
+              + '<td style="white-space:nowrap">' + s.submission + '</td>';
+            tbl.appendChild(tr);
+          });
+        });
+
+        scroll.appendChild(tbl); block.appendChild(scroll);
+        wrap.appendChild(block);
+      }
+    });
+
+    if(totalFound === 0){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No periodic test or revision updates found in the uploaded diaries.';
+      wrap.appendChild(c);
+    }
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
   //  This Week tab
   // ═══════════════════════════════════════════════
   function renderCurWeek(){
@@ -513,7 +603,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   }
 
   // ═══════════════════════════════════════════════
-  //  Full Summary tab
+  //  Full Summary tab (With Subject Dropdowns)
   // ═══════════════════════════════════════════════
   function renderSummary(){
     const wrap  = document.createElement('div');
@@ -525,7 +615,9 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     }
     const wdDates = dates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
     if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
-    allSubjects().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, dates)));
+
+    // Render each subject heading as a collapsible dropdown
+    allSubjects().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, dates, true)));
     return wrap;
   }
 
@@ -551,29 +643,50 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
     return block;
   }
 
-  function buildSubjectBlock(subj, dates){
+  function buildSubjectBlock(subj, dates, isCollapsible = false){
     const block = document.createElement('div'); block.className = 'subject-block';
     const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+    
     let rowCount = 0;
     dates.forEach(d => { rowCount += entries[d].subjects.filter(s => s.subject === subj).length; });
-    hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span>';
-    block.appendChild(hdr);
+
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
-    const tbl = document.createElement('table');
-    tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
-    dates.forEach(d => {
-      entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
-          + '<td>' + s.topic + '</td>'
-          + '<td>' + s.subTopic + '</td>'
-          + '<td>' + s.cw + '</td>'
-          + '<td>' + s.reinforcement + '</td>'
-          + '<td style="white-space:nowrap">' + s.submission + '</td>';
-        tbl.appendChild(tr);
+    const isCollapsed = isCollapsible && collapsedSubjects[subj];
+
+    if(isCollapsible){
+      hdr.classList.add('collapsible');
+      hdr.innerHTML = '<span>' + subj + ' <span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span></span>'
+        + '<span class="chevron' + (isCollapsed ? ' collapsed' : '') + '">▼</span>';
+      
+      hdr.onclick = () => {
+        collapsedSubjects[subj] = !collapsedSubjects[subj];
+        render();
+      };
+    } else {
+      hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span>';
+    }
+
+    block.appendChild(hdr);
+
+    if(!isCollapsed){
+      const tbl = document.createElement('table');
+      tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
+      dates.forEach(d => {
+        entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+            + '<td>' + s.topic + '</td>'
+            + '<td>' + s.subTopic + '</td>'
+            + '<td>' + s.cw + '</td>'
+            + '<td>' + s.reinforcement + '</td>'
+            + '<td style="white-space:nowrap">' + s.submission + '</td>';
+          tbl.appendChild(tr);
+        });
       });
-    });
-    scroll.appendChild(tbl); block.appendChild(scroll);
+      scroll.appendChild(tbl); 
+      block.appendChild(scroll);
+    }
+
     return block;
   }
 
@@ -640,7 +753,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
     const tbl = document.createElement('table');
-    // Updated Column Order
+    // Column Order: Subject, Exercises, Worksheet, Due Date, Diary Date
     tbl.innerHTML = '<tr><th>Subject</th><th>Exercises</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th></tr>';
 
     hwList.forEach(r => {
