@@ -583,7 +583,7 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
   function renderHW(){
     const wrap  = document.createElement('div');
     const tod   = today0();
-    const hwList = [];
+    const map   = new Map();
 
     sortedDates().forEach(entryDate => {
       entries[entryDate].subjects.forEach(s => {
@@ -594,18 +594,30 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
         if(!subDt) return;
         const diff = Math.round((subDt - tod) / 86400000);
         if(diff < 0) return;
-        
-        hwList.push({
-          subject: s.subject,
-          subTopic: s.subTopic,
-          reinforcement: rf,
-          submissionStr: sub,
-          submissionDt: subDt,
-          entryDate,
-          diff
-        });
+
+        // Grouping key: Same Subject + Same Due Date
+        const key = s.subject + '||' + sub;
+
+        if(!map.has(key)){
+          map.set(key, {
+            subject: s.subject,
+            subTopics: new Set(),
+            reinforcements: new Set(),
+            submissionStr: sub,
+            submissionDt: subDt,
+            entryDates: new Set(),
+            diff
+          });
+        }
+
+        const item = map.get(key);
+        if(s.subTopic && !/^(nil|na|-)$/i.test(s.subTopic)) item.subTopics.add(s.subTopic);
+        if(rf) item.reinforcements.add(rf);
+        item.entryDates.add(entryDate);
       });
     });
+
+    const hwList = Array.from(map.values());
 
     if(!hwList.length){
       const c = document.createElement('div'); c.className = 'card empty';
@@ -628,7 +640,8 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
 
     const scroll = document.createElement('div'); scroll.className = 'table-scroll';
     const tbl = document.createElement('table');
-    tbl.innerHTML = '<tr><th>Subject</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th><th>Exercises</th></tr>';
+    // Updated Column Order
+    tbl.innerHTML = '<tr><th>Subject</th><th>Exercises</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th></tr>';
 
     hwList.forEach(r => {
       const tr = document.createElement('tr');
@@ -638,12 +651,16 @@ footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20p
       else                  dueLbl += ' (' + r.diff + 'd)';
       if(r.diff === 0) tr.className = 'due-today';
       else if(r.diff <= 2) tr.className = 'due-soon';
+
+      const exercisesStr = Array.from(r.reinforcements).join('<br>') || '—';
+      const worksheetStr = Array.from(r.subTopics).join('<br>') || '—';
+      const diaryDatesStr = Array.from(r.entryDates).join(', ');
       
       tr.innerHTML = '<td><strong>' + r.subject + '</strong></td>'
-        + '<td>' + r.subTopic + '</td>'
+        + '<td>' + exercisesStr + '</td>'
+        + '<td>' + worksheetStr + '</td>'
         + '<td style="white-space:nowrap;font-weight:600">' + dueLbl + '</td>'
-        + '<td style="white-space:nowrap">' + r.entryDate + '</td>'
-        + '<td>' + r.reinforcement + '</td>';
+        + '<td style="white-space:nowrap">' + diaryDatesStr + '</td>';
       tbl.appendChild(tr);
     });
 
