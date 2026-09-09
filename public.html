@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📒 School Diary Tracker (Public View)</title>
+<!-- Noto Sans Devanagari for correct Hindi rendering -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+// ─────────────────────────────────────────────
+// 🔧 PASTE YOUR SUPABASE CONFIG HERE
+// ─────────────────────────────────────────────
+const SUPABASE_URL = "https://yagdiilvhtliizkpmqni.supabase.co";
+const SUPABASE_KEY = "sb_publishable_zsAvy8ElJbA8cHP5J6rvPA_w-0lFrvZ";
+// ─────────────────────────────────────────────
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+window._dbLoad = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('diary')
+      .select('data')
+      .eq('id', 'grade3')
+      .single();
+    if (error && error.code !== 'PGRST116') { console.error("load:", error); return null; }
+    return data ? data.data.entries || {} : {};
+  } catch(e) { console.error("load:", e); return null; }
+};
+
+// Disabled save function for read-only public access
+window._dbSave = async () => { return false; };
+
+window._supabaseReady = true;
+document.dispatchEvent(new Event("supabase-ready"));
+</script>
+<style>
+:root{
+  --bg:#f6f7fb; --card:#fff; --ink:#1f2430; --muted:#6b7280;
+  --accent:#4472C4; --accent-dark:#2f57a0; --line:#e6e8ee;
+  --good:#1f9d55; --warn:#c0392b; --warn-bg:#fdecea;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ background:var(--bg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; color:var(--ink); }
+.deva{ font-family:"Noto Sans Devanagari",Arial,sans-serif; font-size:0.95em; }
+#app-root{ width:92%; max-width:1100px; min-width:300px; margin:0 auto; padding:10px 0 40px; }
+h1{ font-size:1.18rem; margin:6px 0 2px; line-height:1.35; }
+.updated-lbl{ font-size:0.7rem; color:var(--muted); font-weight:400; }
+.sub{ color:var(--muted); font-size:0.79rem; margin-bottom:12px; }
+.card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.btn{ display:inline-block; background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 14px; font-size:0.86rem; font-weight:600; cursor:pointer; }
+.btn:active{ background:var(--accent-dark); }
+.btn.secondary{ background:#eef1f7; color:var(--ink); }
+.row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.pill{ display:inline-block; background:#eef1f9; border-radius:999px; padding:2px 9px; font-size:0.68rem; color:var(--accent-dark); margin:2px 2px 0 0; }
+.empty{ color:var(--muted); text-align:center; padding:32px 10px; font-size:0.9rem; }
+/* Tab bar – horizontally scrollable on mobile */
+.tab-bar{ display:flex; gap:5px; margin-bottom:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:3px; }
+.tab-bar::-webkit-scrollbar{ height:3px; }
+.tab{ flex:0 0 auto; text-align:center; padding:9px 12px; border-radius:10px; background:#eef1f7; font-size:0.76rem; font-weight:600; cursor:pointer; color:var(--muted); white-space:nowrap; }
+.tab.active{ background:var(--accent); color:#fff; }
+/* Tables & Accordions */
+table{ width:100%; border-collapse:collapse; font-size:0.79rem; }
+th,td{ border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+th{ background:#eef1f9; font-weight:600; }
+.subject-block{ margin-bottom:14px; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:#fff; }
+.subject-header{ background:var(--accent); color:#fff; font-weight:700; padding:10px 12px; font-size:0.88rem; display:flex; justify-content:space-between; align-items:center; }
+.subject-header.collapsible{ cursor:pointer; user-select:none; }
+.subject-header.collapsible:hover{ background:var(--accent-dark); }
+.subject-block table{ border:none; }
+.subject-block th,.subject-block td{ border-color:#eef0f5; }
+.table-scroll{ overflow-x:auto; }
+.chevron{ transition:transform 0.2s ease; display:inline-block; margin-left:8px; font-size:0.75rem; }
+.chevron.collapsed{ transform:rotate(-90deg); }
+/* HW due colours */
+.due-today{ background:#fff1f1; }
+.due-soon{ background:#fffbeb; }
+.hw-today-hdr{ background:#dc2626 !important; }
+.hw-soon-hdr{ background:#b45309 !important; }
+/* Notices */
+.notice-item{ border-bottom:1px solid var(--line); padding:9px 0; font-size:0.82rem; }
+.notice-item:last-child{ border-bottom:none; }
+.notice-date{ font-weight:700; color:var(--accent-dark); margin-right:6px; }
+/* Spinner */
+.spinner{ display:inline-block; width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:5px; }
+@keyframes spin{ to{ transform:rotate(360deg) } }
+.config-warning{ background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:12px; font-size:0.79rem; margin-bottom:14px; line-height:1.6; }
+.config-warning strong{ color:#b45309; }
+.week-chip{ background:#e8f0fe; border-radius:8px; padding:5px 12px; font-size:0.78rem; color:var(--accent-dark); font-weight:600; margin-bottom:12px; display:inline-block; }
+.badge{ display:inline-block; font-size:0.63rem; background:rgba(255,255,255,0.25); border-radius:6px; padding:1px 6px; margin-left:6px; font-weight:400; }
+.legend{ font-size:0.72rem; color:var(--muted); margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+.legend span{ background:#f3f4f6; border-radius:6px; padding:2px 8px; }
+.header-actions{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+footer{ font-size:0.67rem; color:var(--muted); text-align:center; margin-top:20px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div id="app-root"><div class="empty"><span class="spinner"></span> Connecting…</div></div>
+<script>
+(function(){
+  const root = document.getElementById('app-root');
+  let entries   = {};
+  let activeTab = 'hw';
+  let dbError   = false;
+  let collapsedSubjects = {};
+
+  // ═══════════════════════════════════════════════
+  //  Database Handlers
+  // ═══════════════════════════════════════════════
+  async function loadEntries(){
+    if(!window._dbLoad) return false;
+    const res = await window._dbLoad();
+    if(res === null){ dbError = true; return false; }
+    entries = res;
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Date helpers
+  // ═══════════════════════════════════════════════
+  const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+  function parseDiaryDate(str){
+    const m = str.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+    if(!m) return null;
+    const mo = MON[m[2].toLowerCase()];
+    if(mo === undefined) return null;
+    let yr = parseInt(m[3], 10);
+    if(yr < 100) yr += 2000;
+    return new Date(yr, mo, parseInt(m[1], 10));
+  }
+
+  function today0(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+
+  function weekStartOf(d){
+    const day = d.getDay();
+    const s   = new Date(d);
+    s.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    s.setHours(0,0,0,0);
+    return s;
+  }
+  function weekEndOf(ws){ const e = new Date(ws); e.setDate(ws.getDate() + 6); e.setHours(23,59,59,999); return e; }
+
+  function fmtShort(d){ return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+
+  function sortedDates(){
+    return Object.keys(entries).sort((a,b)=>{
+      const da = parseDiaryDate(a), db = parseDiaryDate(b);
+      return (da && db) ? da - db : a.localeCompare(b);
+    });
+  }
+
+  function allSubjects(){
+    const s = new Set();
+    Object.values(entries).forEach(e => e.subjects.forEach(r => s.add(r.subject)));
+    return Array.from(s).sort();
+  }
+
+  function latestDate(){ const d = sortedDates(); return d.length ? d[d.length-1] : null; }
+
+  function isConfigured(){
+    const m = document.querySelector('script[type="module"]');
+    return window._supabaseReady && m && !m.textContent.includes('YOUR_SUPABASE_PROJECT_URL');
+  }
+
+  function isTestOrRevision(s){
+    if(!s) return false;
+    return /\b(revision|pt|periodic\s*test|exam|test|assessment|eval|evaluation|practice)\b/i.test(s);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Root render
+  // ═══════════════════════════════════════════════
+  function render(){
+    root.innerHTML = '';
+    const wrap = document.createElement('div');
+
+    const ld  = latestDate();
+    const h1  = document.createElement('h1');
+    h1.innerHTML = '📒 School Diary Tracker'
+      + (ld ? ' <span class="updated-lbl">· updated ' + ld + '</span>' : '');
+    wrap.appendChild(h1);
+
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = "View subject-wise daily updates, homework assignments, and tests.";
+    wrap.appendChild(sub);
+
+    if(!isConfigured()){
+      const w = document.createElement('div'); w.className = 'config-warning';
+      w.innerHTML = '<strong>⚙️ Setup required:</strong> Open this HTML in a text editor and replace <code>YOUR_SUPABASE_*</code> with your Supabase project credentials.';
+      wrap.appendChild(w);
+    }
+    if(dbError){
+      const e = document.createElement('div'); e.className = 'card';
+      e.innerHTML = '<span style="color:var(--warn)">⚠️ Cannot connect to Supabase. Check config values and table policies, then refresh.</span>';
+      wrap.appendChild(e);
+    }
+
+    const tabBar = document.createElement('div'); tabBar.className = 'tab-bar';
+    [
+      ['hw',       '📌 HW Due'],
+      ['tests',    '📝 Tests & Revision'],
+      ['curweek',  '📅 This Week'],
+      ['lastweek', '⏮️ Last Week'],
+      ['summary',  '📋 Summary'],
+      ['notices',  '📢 Notices'],
+    ].forEach(([key, label]) => {
+      const t = document.createElement('div');
+      t.className = 'tab' + (activeTab === key ? ' active' : '');
+      t.textContent = label;
+      t.onclick = () => { activeTab = key; render(); };
+      tabBar.appendChild(t);
+    });
+    wrap.appendChild(tabBar);
+
+    if(activeTab === 'tests')    wrap.appendChild(renderTestsAndRevision());
+    if(activeTab === 'curweek')  wrap.appendChild(renderCurWeek());
+    if(activeTab === 'lastweek') wrap.appendChild(renderLastWeek());
+    if(activeTab === 'summary')  wrap.appendChild(renderSummary());
+    if(activeTab === 'hw')       wrap.appendChild(renderHW());
+    if(activeTab === 'notices')  wrap.appendChild(renderNotices());
+
+    wrap.appendChild(Object.assign(document.createElement('footer'), {
+      textContent: 'Read-only public diary tracker.'
+    }));
+    root.appendChild(wrap);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Tests & Revision Tab
+  // ═══════════════════════════════════════════════
+  function renderTestsAndRevision(){
+    const wrap = document.createElement('div');
+    const dates = sortedDates();
+    let totalFound = 0;
+
+    allSubjects().forEach(subj => {
+      const filteredDates = dates.filter(d => {
+        return entries[d].subjects.some(s => 
+          s.subject === subj && (
+            isTestOrRevision(s.topic) ||
+            isTestOrRevision(s.subTopic) ||
+            isTestOrRevision(s.cw) ||
+            isTestOrRevision(s.reinforcement)
+          )
+        );
+      });
+
+      if(filteredDates.length > 0){
+        totalFound += filteredDates.length;
+        const block = document.createElement('div'); block.className = 'subject-block';
+        const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+        
+        let rowCount = 0;
+        filteredDates.forEach(d => {
+          rowCount += entries[d].subjects.filter(s => 
+            s.subject === subj && (
+              isTestOrRevision(s.topic) || isTestOrRevision(s.subTopic) || 
+              isTestOrRevision(s.cw) || isTestOrRevision(s.reinforcement)
+            )
+          ).length;
+        });
+
+        hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' test/revision item' + (rowCount !== 1 ? 's' : '') + '</span>';
+        block.appendChild(hdr);
+
+        const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+        const tbl = document.createElement('table');
+        tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
+
+        filteredDates.forEach(d => {
+          entries[d].subjects.filter(s => 
+            s.subject === subj && (
+              isTestOrRevision(s.topic) || isTestOrRevision(s.subTopic) || 
+              isTestOrRevision(s.cw) || isTestOrRevision(s.reinforcement)
+            )
+          ).forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+              + '<td>' + s.topic + '</td>'
+              + '<td>' + s.subTopic + '</td>'
+              + '<td>' + s.cw + '</td>'
+              + '<td>' + s.reinforcement + '</td>'
+              + '<td style="white-space:nowrap">' + s.submission + '</td>';
+            tbl.appendChild(tr);
+          });
+        });
+
+        scroll.appendChild(tbl); block.appendChild(scroll);
+        wrap.appendChild(block);
+      }
+    });
+
+    if(totalFound === 0){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No periodic test or revision updates found in the diary entries.';
+      wrap.appendChild(c);
+    }
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  This Week tab
+  // ═══════════════════════════════════════════════
+  function renderCurWeek(){
+    const wrap  = document.createElement('div');
+    const today = today0();
+    const ws    = weekStartOf(today);
+    const we    = weekEndOf(ws);
+
+    const weekDates = sortedDates().filter(d => {
+      const dt = parseDiaryDate(d);
+      return dt && dt >= ws && dt <= we;
+    });
+
+    const chip = document.createElement('div'); chip.className = 'week-chip';
+    chip.textContent = '📅 Week of ' + fmtShort(ws) + ' – ' + fmtShort(we);
+    wrap.appendChild(chip);
+
+    if(!weekDates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.innerHTML = 'No diary updates available for this week yet.';
+      wrap.appendChild(c); return wrap;
+    }
+
+    const subjSet = new Set();
+    weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
+    Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Last Week tab
+  // ═══════════════════════════════════════════════
+  function renderLastWeek(){
+    const wrap  = document.createElement('div');
+    const today = today0();
+    const lastWeekDate = new Date(today);
+    lastWeekDate.setDate(today.getDate() - 7);
+    
+    const ws = weekStartOf(lastWeekDate);
+    const we = weekEndOf(ws);
+
+    const weekDates = sortedDates().filter(d => {
+      const dt = parseDiaryDate(d);
+      return dt && dt >= ws && dt <= we;
+    });
+
+    const chip = document.createElement('div'); chip.className = 'week-chip';
+    chip.textContent = '⏮️ Week of ' + fmtShort(ws) + ' – ' + fmtShort(we);
+    wrap.appendChild(chip);
+
+    if(!weekDates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.innerHTML = 'No diary data recorded for last week.';
+      wrap.appendChild(c); return wrap;
+    }
+
+    const subjSet = new Set();
+    weekDates.forEach(d => entries[d].subjects.forEach(s => subjSet.add(s.subject)));
+    Array.from(subjSet).sort().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, weekDates)));
+
+    const wdDates = weekDates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates));
+
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Full Summary tab
+  // ═══════════════════════════════════════════════
+  function renderSummary(){
+    const wrap  = document.createElement('div');
+    const dates = sortedDates();
+    if(!dates.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No diary data currently available.';
+      wrap.appendChild(c); return wrap;
+    }
+
+    // Export CSV button header
+    const topBar = document.createElement('div'); topBar.className = 'header-actions';
+    const cBtn = document.createElement('button'); cBtn.className = 'btn secondary';
+    cBtn.textContent = '📥 Export CSV'; cBtn.onclick = exportCsv;
+    topBar.appendChild(cBtn);
+    wrap.appendChild(topBar);
+
+    allSubjects().forEach(subj => wrap.appendChild(buildSubjectBlock(subj, dates, true)));
+
+    const wdDates = dates.filter(d => entries[d].wordsEn?.length || entries[d].wordsHi?.length);
+    if(wdDates.length) wrap.appendChild(buildWordsBlock(wdDates, true));
+
+    return wrap;
+  }
+
+  // ── shared block builders ─────────────────────
+  function buildWordsBlock(dates, isCollapsible = false){
+    const blockKey = '__words_of_the_day__';
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+
+    const isCollapsed = isCollapsible && (collapsedSubjects[blockKey] !== false);
+
+    if(isCollapsible){
+      hdr.classList.add('collapsible');
+      hdr.innerHTML = '<span>📝 Words of the Day <span class="badge">' + dates.length + ' day' + (dates.length !== 1 ? 's' : '') + '</span></span>'
+        + '<span class="chevron' + (isCollapsed ? ' collapsed' : '') + '">▼</span>';
+      hdr.onclick = () => {
+        collapsedSubjects[blockKey] = !isCollapsed;
+        render();
+      };
+    } else {
+      hdr.textContent = '📝 Words of the Day';
+    }
+
+    block.appendChild(hdr);
+
+    if(!isCollapsed){
+      const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+      const tbl = document.createElement('table');
+      tbl.innerHTML = '<tr><th>Date</th><th>🇬🇧 English</th><th>🇮🇳 Hindi</th></tr>';
+      dates.forEach(d => {
+        const e = entries[d];
+        const tr = document.createElement('tr');
+        const hiWords = (e.wordsHi && e.wordsHi.length) ? e.wordsHi.join(', ') : '—';
+        tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+          + '<td>' + ((e.wordsEn && e.wordsEn.length) ? e.wordsEn.join(', ') : '—') + '</td>'
+          + '<td class="deva">' + hiWords + '</td>';
+        tbl.appendChild(tr);
+      });
+      scroll.appendChild(tbl); 
+      block.appendChild(scroll);
+    }
+
+    return block;
+  }
+
+  function buildSubjectBlock(subj, dates, isCollapsible = false){
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+    
+    let rowCount = 0;
+    dates.forEach(d => { rowCount += entries[d].subjects.filter(s => s.subject === subj).length; });
+
+    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+    const isCollapsed = isCollapsible && (collapsedSubjects[subj] !== false);
+
+    if(isCollapsible){
+      hdr.classList.add('collapsible');
+      hdr.innerHTML = '<span>' + subj + ' <span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span></span>'
+        + '<span class="chevron' + (isCollapsed ? ' collapsed' : '') + '">▼</span>';
+      
+      hdr.onclick = () => {
+        collapsedSubjects[subj] = !isCollapsed;
+        render();
+      };
+    } else {
+      hdr.innerHTML = subj + '<span class="badge">' + rowCount + ' session' + (rowCount !== 1 ? 's' : '') + '</span>';
+    }
+
+    block.appendChild(hdr);
+
+    if(!isCollapsed){
+      const tbl = document.createElement('table');
+      tbl.innerHTML = '<tr><th>Date</th><th>Topic</th><th>Sub Topic</th><th>CW</th><th>Reinforcement</th><th>Submission</th></tr>';
+      dates.forEach(d => {
+        entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td style="white-space:nowrap">' + d + '</td>'
+            + '<td>' + s.topic + '</td>'
+            + '<td>' + s.subTopic + '</td>'
+            + '<td>' + s.cw + '</td>'
+            + '<td>' + s.reinforcement + '</td>'
+            + '<td style="white-space:nowrap">' + s.submission + '</td>';
+          tbl.appendChild(tr);
+        });
+      });
+      scroll.appendChild(tbl); 
+      block.appendChild(scroll);
+    }
+
+    return block;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  HW Due tab (Collated Table by Due Date)
+  // ═══════════════════════════════════════════════
+  function renderHW(){
+    const wrap  = document.createElement('div');
+    const tod   = today0();
+    const map   = new Map();
+
+    sortedDates().forEach(entryDate => {
+      entries[entryDate].subjects.forEach(s => {
+        const rf  = s.reinforcement.trim();
+        const sub = s.submission.trim();
+        if(/^(nil|na|-)$/i.test(rf) || /^(nil|na|-)$/i.test(sub)) return;
+        const subDt = parseDiaryDate(sub);
+        if(!subDt) return;
+        const diff = Math.round((subDt - tod) / 86400000);
+        if(diff < 0) return;
+
+        const key = s.subject + '||' + sub;
+
+        if(!map.has(key)){
+          map.set(key, {
+            subject: s.subject,
+            subTopics: new Set(),
+            reinforcements: new Set(),
+            submissionStr: sub,
+            submissionDt: subDt,
+            entryDates: new Set(),
+            diff
+          });
+        }
+
+        const item = map.get(key);
+        if(s.subTopic && !/^(nil|na|-)$/i.test(s.subTopic)) item.subTopics.add(s.subTopic);
+        if(rf) item.reinforcements.add(rf);
+        item.entryDates.add(entryDate);
+      });
+    });
+
+    const hwList = Array.from(map.values());
+
+    if(!hwList.length){
+      const c = document.createElement('div'); c.className = 'card empty';
+      c.textContent = 'No pending homework with a future due date. 🎉';
+      wrap.appendChild(c); return wrap;
+    }
+
+    hwList.sort((a,b) => a.submissionDt - b.submissionDt);
+
+    const block = document.createElement('div'); block.className = 'subject-block';
+    const hdr   = document.createElement('div'); hdr.className = 'subject-header';
+
+    const minDiff = hwList[0].diff;
+    if(minDiff === 0)      hdr.classList.add('hw-today-hdr');
+    else if(minDiff <= 2)  hdr.classList.add('hw-soon-hdr');
+
+    hdr.innerHTML = 'Pending Homework Summary <span class="badge">' + hwList.length + ' item' + (hwList.length !== 1 ? 's' : '') + '</span>';
+    block.appendChild(hdr);
+
+    const scroll = document.createElement('div'); scroll.className = 'table-scroll';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<tr><th>Subject</th><th>Exercises</th><th>Worksheet / Sub Topic</th><th>Due Date</th><th>Diary Date</th></tr>';
+
+    hwList.forEach(r => {
+      const tr = document.createElement('tr');
+      let dueLbl = r.submissionStr;
+      if(r.diff === 0)      dueLbl += ' 🔴 Today';
+      else if(r.diff === 1) dueLbl += ' 🟡 Tomorrow';
+      else                  dueLbl += ' (' + r.diff + 'd)';
+      if(r.diff === 0) tr.className = 'due-today';
+      else if(r.diff <= 2) tr.className = 'due-soon';
+
+      const exercisesStr = Array.from(r.reinforcements).join('<br>') || '—';
+      const worksheetStr = Array.from(r.subTopics).join('<br>') || '—';
+      const diaryDatesStr = Array.from(r.entryDates).join(', ');
+      
+      tr.innerHTML = '<td><strong>' + r.subject + '</strong></td>'
+        + '<td>' + exercisesStr + '</td>'
+        + '<td>' + worksheetStr + '</td>'
+        + '<td style="white-space:nowrap;font-weight:600">' + dueLbl + '</td>'
+        + '<td style="white-space:nowrap">' + diaryDatesStr + '</td>';
+      tbl.appendChild(tr);
+    });
+
+    scroll.appendChild(tbl); block.appendChild(scroll);
+    wrap.appendChild(block);
+
+    const leg = document.createElement('div'); leg.className = 'legend';
+    leg.innerHTML = '<span>🔴 Due today</span><span>🟡 Due within 2 days</span><span>✅ Upcoming</span>';
+    wrap.appendChild(leg);
+    return wrap;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Notices tab
+  // ═══════════════════════════════════════════════
+  function renderNotices(){
+    const card = document.createElement('div'); card.className = 'card';
+    const dates = sortedDates().filter(d => entries[d].notice);
+    if(!dates.length){
+      card.className = 'card empty'; card.textContent = 'No notices captured yet.'; return card;
+    }
+    dates.slice().reverse().forEach(d => {
+      const item = document.createElement('div'); item.className = 'notice-item';
+      item.innerHTML = '<span class="notice-date">' + d + '</span>'
+        + '<div style="margin-top:4px">' + entries[d].notice + '</div>';
+      card.appendChild(item);
+    });
+    return card;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  CSV export
+  // ═══════════════════════════════════════════════
+  function exportCsv(){
+    const dates = sortedDates();
+    const rows  = [['Subject','Diary Date','Topic','Sub Topic','CW','Reinforcement','Submission Date']];
+    allSubjects().forEach(subj => {
+      dates.forEach(d => {
+        entries[d].subjects.filter(s => s.subject === subj).forEach(s => {
+          rows.push([subj, d, s.topic, s.subTopic, s.cw, s.reinforcement, s.submission]);
+        });
+      });
+    });
+    dates.forEach(d => {
+      const e = entries[d];
+      if(e.wordsEn && e.wordsEn.length) rows.push(['Words – English', d, e.wordsEn.join(', '),'','','','']);
+      if(e.wordsHi && e.wordsHi.length) rows.push(['Words – Hindi',   d, e.wordsHi.join(', '),'','','','']);
+    });
+    const csv  = rows.map(r => r.map(c => '"' + String(c||'').replace(/"/g,'""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'diary_summary.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Bootstrap
+  // ═══════════════════════════════════════════════
+  async function init(){
+    await new Promise(resolve => {
+      if(window._supabaseReady){ resolve(); return; }
+      document.addEventListener('supabase-ready', resolve, {once:true});
+      setTimeout(resolve, 4000);
+    });
+    root.innerHTML = '<div class="empty"><span class="spinner"></span> Loading saved data…</div>';
+    await loadEntries();
+    render();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
